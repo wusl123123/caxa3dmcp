@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "caxa3dmcp": {
+      "command": "C:\\code\\ICAPI\\caxa3dmcp\\McpServer\\run.bat",
+      "args": []
+    }
+  }
+}

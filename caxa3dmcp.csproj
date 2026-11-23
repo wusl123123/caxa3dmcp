@@ -1,0 +1,120 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 用法：caxa3dmcp 全部替换为项目名；Lib\ 下放 ICApiAddin.snk 与 interop.ICApiIronCAD.dll -->
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>caxa3dmcp</RootNamespace>
+    <AssemblyName>caxa3dmcp</AssemblyName>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>disable</Nullable>
+
+    <!-- 自带 AssemblyInfo.cs（含 ComVisible(false) 程序集默认值）：关掉 SDK 自动生成，否则 AssemblyTitle/Product/Version 重复报 CS0579 -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <!-- CAXA 3D 为 64 位进程，Add-in DLL 必须 x64 -->
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+
+    <!-- 强名称：publicKeyToken 必须为 56647e1eee90f6d4 -->
+    <AssemblyOriginatorKeyFile>Lib\ICApiAddin.snk</AssemblyOriginatorKeyFile>
+    <SignAssembly>true</SignAssembly>
+    <DelaySign>false</DelaySign>
+
+    <!-- 标题版本：中文名称-yyyyMMddHHmm（版本取 DLL 写入时间，编译即更新） -->
+    <Product>caxa3dmcp</Product>
+    <AssemblyTitle>caxa3dmcp</AssemblyTitle>
+    <Version>1.0.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+  </PropertyGroup>
+
+  <!-- 无 Visual Studio 的机器也能 dotnet build 编 net48 -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
+      <PrivateAssets>All</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
+    <!-- 26-11-21 toolbox 文件工具：System.IO.Packaging 零依赖读写 xlsx 所需（与 toolboxmaker 同款） -->
+    <Reference Include="WindowsBase" />
+    <!-- 26-11-15 工程图附加二维码：QRCoder 1.6.0 net40，随包 Lib\QRCoder.dll（CAXA bin 无同名 DLL） -->
+    <Reference Include="QRCoder">
+      <HintPath>Lib\QRCoder.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="interop.ICApiIronCAD">
+      <HintPath>Lib\interop.ICApiIronCAD.dll</HintPath>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="stdole, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <HintPath>C:\Windows\assembly\GAC\stdole\7.0.3300.0__b03f5f7f11d50a3a\stdole.dll</HintPath>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+  </ItemGroup>
+
+  <!-- McpServer 是独立 .NET 8 工程（MCP 服务端 stdio 进程），不能编译进 net48 add-in -->
+  <ItemGroup>
+    <Compile Remove="McpServer\**\*.cs" />
+    <None Remove="McpServer\**" />
+    <Content Remove="McpServer\**" />
+  </ItemGroup>
+
+  <!-- 运行期真实读取的资源必须随编译拷到输出目录（黑名单思路：除源码外一律复制） -->
+  <ItemGroup>
+    <None Include="deploy.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="restore.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="strip-manifest.ps1" CopyToOutputDirectory="PreserveNewest" Condition="Exists('strip-manifest.ps1')" />
+    <None Include="安装.bat" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="卸载.bat" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="*.ini" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="*.config" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 26-11-13 图纸环境唯一桥：CRX 编译产物 + 全仓唯一基准的预热空图纸 + 离线命令索引。
+         CRX 由 Bridge\build.ps1 单独编译（MSBuild/v143）；未编译时条件跳过，不阻断 net48 工程。 -->
+    <None Include="Bridge\bin\caxa3dmcp_bridge.crx" Link="caxa3dmcp_bridge.crx"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('Bridge\bin\caxa3dmcp_bridge.crx')" />
+    <None Include="C:\code\ICAPI\caxa3dmytoolsaddin\caxa3d图纸环境预热.exb"
+          Link="caxa3d图纸环境预热.exb" CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('C:\code\ICAPI\caxa3dmytoolsaddin\caxa3d图纸环境预热.exb')" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <MtExe Condition="'$(MtExe)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\mt.exe</MtExe>
+    <SnExe Condition="'$(SnExe)' == ''">C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\sn.exe</SnExe>
+    <KeyFileFullPath>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(AssemblyOriginatorKeyFile)'))</KeyFileFullPath>
+  </PropertyGroup>
+
+  <!--
+    编译后处理四步（不可省）：
+    1. mt.exe -managedassemblyname 生成 SxS 清单（漏了就没有 <clrClass> → SxS 激活失败 → InitSelf 永不执行）
+    2. strip-manifest.ps1 剥离 interop.* 的 clrClass/clrSurrogate（保留 assemblyIdentity + 自己的 Addin clrClass）
+    3. mt.exe -outputresource:DLL;#2 嵌入清单
+    4. sn.exe -R 重签（嵌入 PE 会破坏强签名，不重签 CAXA 拒载）
+  -->
+  <Target Name="EmbedSxsManifestAndResign"
+          AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' and Exists('$(MtExe)') and Exists('$(SnExe)')">
+    <Message Importance="high" Text="==> 1/4 生成 SxS 清单: $(TargetFileName).manifest" />
+    <Exec Command="&quot;$(MtExe)&quot; -managedassemblyname:&quot;$(TargetFileName)&quot; -nodependency -out:&quot;$(TargetFileName).manifest&quot;"
+          WorkingDirectory="$(TargetDir)" IgnoreExitCode="false" />
+
+    <Message Importance="high" Text="==> 2/4 剥离 interop clrClass/clrSurrogate" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\strip-manifest.ps1&quot; -Path &quot;$(TargetDir)$(TargetFileName).manifest&quot;"
+          Condition="Exists('$(MSBuildProjectDirectory)\strip-manifest.ps1')" IgnoreExitCode="false" />
+
+    <Message Importance="high" Text="==> 3/4 嵌入清单 RT_MANIFEST ID=2" />
+    <Exec Command="&quot;$(MtExe)&quot; -manifest &quot;$(TargetFileName).manifest&quot; -outputresource:&quot;$(TargetFileName)&quot;;#2"
+          WorkingDirectory="$(TargetDir)" IgnoreExitCode="false" />
+
+    <Message Importance="high" Text="==> 4/4 sn.exe 重签" />
+    <Exec Command="&quot;$(SnExe)&quot; -R &quot;$(TargetPath)&quot; &quot;$(KeyFileFullPath)&quot;"
+          WorkingDirectory="$(TargetDir)" IgnoreExitCode="false" />
+  </Target>
+
+</Project>

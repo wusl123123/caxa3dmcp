@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>caxa3dmcp_server</RootNamespace>
+    <AssemblyName>caxa3dmcpserver</AssemblyName>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyTitle>caxa3dmcp MCP Server</AssemblyTitle>
+    <Product>caxa3dmcp MCP Server</Product>
+    <Version>0.1.0.0</Version>
+  </PropertyGroup>
+
+</Project>
